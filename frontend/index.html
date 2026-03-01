@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Free3D — Image to 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0c;--s1:#111114;--s2:#18181d;--border:#2a2a32;
+  --accent:#e8ff47;--text:#f0f0f5;--muted:#6b6b7a;
+  --ok:#4ade80;--err:#f87171;--warn:#fbbf24;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E")}
+#app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 32px;
+  border-bottom:1px solid var(--border);background:rgba(10,10,12,.88);
+  backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+.logo{font-size:20px;font-weight:800;letter-spacing:-.5px}
+.logo span{color:var(--accent)}
+.logo-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:3px}
+.hdr-r{display:flex;align-items:center;gap:10px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:blink 2s infinite}
+.dot.warn{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.dot.err{background:var(--err);box-shadow:0 0 8px var(--err)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-txt{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+
+main{flex:1;display:grid;grid-template-columns:1fr 1fr;max-height:calc(100vh - 57px)}
+.panel{padding:40px 36px;overflow-y:auto;display:flex;flex-direction:column;gap:26px}
+.panel-r{background:var(--s1);border-left:1px solid var(--border)}
+
+.lbl{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--muted);
+  text-transform:uppercase;display:flex;align-items:center;gap:10px}
+.lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.drop{border:1.5px dashed var(--border);border-radius:4px;padding:40px 24px;
+  text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--s1)}
+.drop:hover,.drop.drag{border-color:var(--accent);background:rgba(232,255,71,.02)}
+.drop.has-img{border-style:solid;border-color:var(--accent);padding:0}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drop-icon{font-size:36px;margin-bottom:12px;opacity:.3}
+.drop-title{font-size:17px;font-weight:700;margin-bottom:6px}
+.drop-sub{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.drop-preview{width:100%;max-height:260px;object-fit:contain;display:block}
+
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.s-item{display:flex;flex-direction:column;gap:5px}
+.s-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px}
+.s-select{background:var(--s2);border:1px solid var(--border);color:var(--text);
+  font-family:'Syne',sans-serif;font-size:13px;padding:9px 11px;
+  border-radius:3px;outline:none;transition:border-color .2s;cursor:pointer;width:100%}
+.s-select:focus{border-color:var(--accent)}
+
+.btn-go{background:var(--accent);color:#0a0a0c;border:none;padding:17px;
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:800;letter-spacing:1px;
+  cursor:pointer;border-radius:3px;transition:all .2s;width:100%;
+  display:flex;align-items:center;justify-content:center;gap:10px}
+.btn-go:hover:not(:disabled){background:#f0ff70;transform:translateY(-1px)}
+.btn-go:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-go.loading{background:var(--s2);color:var(--accent);border:1px solid var(--accent)}
+
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;color:var(--muted)}
+.empty-icon{font-size:56px;opacity:.1}
+.empty-txt{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:2px}
+
+.card{background:var(--bg);border:1px solid var(--border);border-radius:4px;
+  padding:22px;display:flex;flex-direction:column;gap:18px;animation:slidein .3s ease}
+@keyframes slidein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.card-hdr{display:flex;align-items:flex-start;justify-content:space-between}
+.card-title{font-size:15px;font-weight:700}
+.card-id{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px}
+
+.badge{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 9px;border-radius:2px;font-weight:500;white-space:nowrap}
+.badge.queued{background:rgba(107,107,122,.15);color:var(--muted);border:1px solid var(--border)}
+.badge.processing{background:rgba(232,255,71,.1);color:var(--accent);border:1px solid rgba(232,255,71,.3)}
+.badge.done{background:rgba(74,222,128,.1);color:var(--ok);border:1px solid rgba(74,222,128,.3)}
+.badge.error{background:rgba(248,113,113,.1);color:var(--err);border:1px solid rgba(248,113,113,.3)}
+
+.prog-wrap{display:flex;flex-direction:column;gap:6px}
+.prog-track{height:2px;background:var(--s2);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s;box-shadow:0 0 6px var(--accent)}
+.prog-meta{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+
+.preview-frame{border:1px solid var(--border);border-radius:3px;overflow:hidden;
+  background:var(--s2);aspect-ratio:1;display:flex;align-items:center;justify-content:center}
+.preview-frame img{width:100%;height:100%;object-fit:contain}
+.preview-ph{display:flex;flex-direction:column;align-items:center;gap:8px;
+  color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px}
+.spinner{width:28px;height:28px;border:2px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.dl-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.dl-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 6px;
+  border:1px solid var(--border);border-radius:3px;background:var(--s2);
+  color:var(--text);text-decoration:none;transition:all .2s}
+.dl-btn:hover{border-color:var(--accent);background:rgba(232,255,71,.04);color:var(--accent)}
+.dl-fmt{font-size:13px;font-weight:700;letter-spacing:1px}
+.dl-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)}
+
+.err-box{color:var(--err);font-family:'JetBrains Mono',monospace;font-size:11px;
+  padding:12px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:3px;word-break:break-word}
+
+.hist-list{display:flex;flex-direction:column;gap:6px}
+.hist-item{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border:1px solid var(--border);border-radius:3px;background:var(--bg);cursor:pointer;transition:all .15s}
+.hist-item:hover{border-color:var(--muted)}
+.hist-item.active{border-color:var(--accent)}
+.hist-info{flex:1;min-width:0}
+.hist-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-date{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)}
+
+@media(max-width:860px){main{grid-template-columns:1fr;max-height:none}
+  .panel-r{border-left:none;border-top:1px solid var(--border)}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <div>
+    <div class="logo"><span>[</span>FREE3D<span>]</span></div>
+    <div class="logo-sub">IMAGE → 3D PIPELINE</div>
+  </div>
+  <div class="hdr-r">
+    <div class="dot err" id="dot"></div>
+    <span class="hdr-txt" id="hdrTxt">verbinden...</span>
+  </div>
+</header>
+
+<main>
+<div class="panel">
+  <div>
+    <div class="lbl" style="margin-bottom:14px">01 / AFBEELDING</div>
+    <div class="drop" id="drop">
+      <input type="file" id="fileIn" accept="image/*"/>
+      <div id="dropContent">
+        <div class="drop-icon">⬡</div>
+        <div class="drop-title">Sleep een afbeelding</div>
+        <div class="drop-sub">JPG · PNG · WEBP · HEIC</div>
+        <div style="margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)">
+          TIP: gebruik foto met object op neutrale achtergrond
+        </div>
+      </div>
+      <img id="dropPrev" class="drop-preview" style="display:none"/>
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl" style="margin-bottom:12px">02 / INSTELLINGEN</div>
+    <div class="settings">
+      <div class="s-item">
+        <label class="s-lbl">ACHTERGROND</label>
+        <select class="s-select" id="setBg">
+          <option value="remove" selected>Verwijderen ✓ (aanbevolen)</option>
+          <option value="keep">Behouden</option>
+        </select>
+      </div>
+      <div class="s-item">
+        <label class="s-lbl">MESH RESOLUTIE</label>
+        <select class="s-select" id="setQuality">
+          <option value="256">256 — Snel</option>
+          <option value="320">320 — Normaal</option>
+          <option value="384">384 — Goed</option>
+          <option value="448">448 — Hoog</option>
+          <option value="512" selected>512 — Zeer hoog ★</option>
+          <option value="640">640 — Ultra</option>
+          <option value="768">768 — Extreem</option>
+          <option value="1024">1024 — Maximum</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-go" id="btnGo" disabled onclick="startConvert()">
+    <span id="btnIcon">⬡</span>
+    <span id="btnTxt">SELECTEER EEN AFBEELDING</span>
+  </button>
+</div>
+
+<div class="panel panel-r">
+  <div class="lbl">RESULTAAT</div>
+  <div id="output">
+    <div class="empty">
+      <div class="empty-icon">◈</div>
+      <div class="empty-txt">WACHT OP INPUT</div>
+    </div>
+  </div>
+  <div id="histSec" style="display:none">
+    <div class="lbl" style="margin-bottom:12px">GESCHIEDENIS</div>
+    <div class="hist-list" id="histList"></div>
+  </div>
+</div>
+</main>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let file = null, currentJob = null, pollTimer = null;
+let history = JSON.parse(localStorage.getItem('f3d_v3') || '[]');
+
+// ── Health check ──────────────────────────────────────────────────────────────
+async function checkHealth() {
+  const dot = document.getElementById('dot');
+  const txt = document.getElementById('hdrTxt');
+  try {
+    const r = await fetch(`${API}/health`);
+    const d = await r.json();
+    if (d.triposr) {
+      dot.className = 'dot';
+      txt.textContent = `TripoSR actief${d.bg_remover ? ' + achtergrond verwijdering' : ''}`;
+    } else {
+      dot.className = 'dot warn';
+      txt.textContent = 'Demo modus (geen GPU)';
+    }
+  } catch {
+    dot.className = 'dot err';
+    txt.textContent = 'Server offline — start start.ps1';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 15000);
+
+// ── File drop ──────────────────────────────────────────────────────────────────
+const drop = document.getElementById('drop');
+const fileIn = document.getElementById('fileIn');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); setFile(e.dataTransfer.files[0]); });
+fileIn.addEventListener('change', () => setFile(fileIn.files[0]));
+
+function setFile(f) {
+  if (!f || !f.type.startsWith('image/')) return;
+  file = f;
+  document.getElementById('dropPrev').src = URL.createObjectURL(f);
+  document.getElementById('dropPrev').style.display = 'block';
+  document.getElementById('dropContent').style.display = 'none';
+  drop.classList.add('has-img');
+  document.getElementById('btnGo').disabled = false;
+  document.getElementById('btnTxt').textContent = 'GENEREER 3D MODEL';
+}
+
+// ── Conversie ─────────────────────────────────────────────────────────────────
+async function startConvert() {
+  if (!file) return;
+  const btn = document.getElementById('btnGo');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  document.getElementById('btnTxt').textContent = 'UPLOADEN...';
+
+  const bgMode = document.getElementById('setBg').value;
+  const resolution = document.getElementById('setQuality').value;
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const r = await fetch(`${API}/convert?bg_mode=${bgMode}&resolution=${resolution}`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(await r.text());
+    const job = await r.json();
+    currentJob = job.job_id;
+    addHistory(job, file.name);
+    renderCard(job);
+    startPoll(job.job_id);
+    document.getElementById('btnTxt').textContent = 'VERWERKEN...';
+  } catch(e) {
+    alert('Upload fout: ' + e.message);
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    document.getElementById('btnTxt').textContent = 'GENEREER 3D MODEL';
+  }
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
+function startPoll(id) {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const job = await (await fetch(`${API}/status/${id}`)).json();
+      renderCard(job);
+      updateHistory(job);
+      if (job.status === 'done' || job.status === 'error') {
+        clearInterval(pollTimer);
+        const btn = document.getElementById('btnGo');
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        document.getElementById('btnTxt').textContent = 'NIEUWE CONVERSIE';
+        document.getElementById('btnIcon').textContent = '⬡';
+      }
+    } catch {}
+  }, 1500);
+}
+
+// ── Job card ──────────────────────────────────────────────────────────────────
+function renderCard(job) {
+  const labels = { queued: 'IN WACHTRIJ', processing: 'VERWERKEN', done: 'KLAAR', error: 'FOUT' };
+  document.getElementById('output').innerHTML = `
+    <div class="card">
+      <div class="card-hdr">
+        <div>
+          <div class="card-title">3D Generatie</div>
+          <div class="card-id"># ${job.job_id.slice(0,8).toUpperCase()} · ${job.mode || ''}</div>
+        </div>
+        <div class="badge ${job.status}">${labels[job.status] || job.status}</div>
+      </div>
+
+      ${job.status !== 'done' ? `
+      <div class="prog-wrap">
+        <div class="prog-track"><div class="prog-fill" style="width:${job.progress}%"></div></div>
+        <div class="prog-meta"><span>${job.message}</span><span>${job.progress}%</span></div>
+      </div>` : ''}
+
+      <div class="preview-frame">
+        ${job.preview_url
+          ? `<img src="${API}${job.preview_url}?t=${Date.now()}" alt="preview"/>`
+          : `<div class="preview-ph">${job.status === 'processing' || job.status === 'queued'
+              ? '<div class="spinner"></div><span>Genereren...</span>'
+              : '<span style="font-size:28px;opacity:.15">◈</span>'}</div>`}
+      </div>
+
+      ${job.status === 'done' ? `
+      <div>
+        <div class="lbl" style="margin-bottom:10px">DOWNLOADS</div>
+        <div class="dl-grid">
+          <a class="dl-btn" href="${API}${job.stl_url}" download>
+            <span class="dl-fmt">STL</span><span class="dl-lbl">Print-ready</span>
+          </a>
+          <a class="dl-btn" href="${API}${job.tmf_url}" download>
+            <span class="dl-fmt">3MF</span><span class="dl-lbl">Met kleur</span>
+          </a>
+          <a class="dl-btn" href="${API}${job.glb_url}" download>
+            <span class="dl-fmt">GLB</span><span class="dl-lbl">Textured</span>
+          </a>
+        </div>
+      </div>` : ''}
+
+      ${job.status === 'error' ? `<div class="err-box">✕ ${job.message}</div>` : ''}
+    </div>`;
+}
+
+// ── Geschiedenis ──────────────────────────────────────────────────────────────
+function addHistory(job, name) {
+  history.unshift({ job_id: job.job_id, name, date: new Date().toLocaleString('nl-NL'), status: job.status });
+  if (history.length > 10) history.pop();
+  localStorage.setItem('f3d_v3', JSON.stringify(history));
+  renderHistory();
+}
+function updateHistory(job) {
+  const h = history.find(x => x.job_id === job.job_id);
+  if (h) { h.status = job.status; localStorage.setItem('f3d_v3', JSON.stringify(history)); renderHistory(); }
+}
+function renderHistory() {
+  const sec = document.getElementById('histSec');
+  if (!history.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  const icons = { queued:'○', processing:'◌', done:'●', error:'✕' };
+  document.getElementById('histList').innerHTML = history.map(h => `
+    <div class="hist-item ${h.job_id === currentJob ? 'active' : ''}" onclick="loadJob('${h.job_id}')">
+      <div class="hist-info">
+        <div class="hist-name">${h.name}</div>
+        <div class="hist-date">${h.date}</div>
+      </div>
+      <div class="badge ${h.status}">${icons[h.status] || '?'} ${h.status.toUpperCase()}</div>
+    </div>`).join('');
+}
+async function loadJob(id) {
+  currentJob = id;
+  try { renderCard(await (await fetch(`${API}/status/${id}`)).json()); } catch {}
+  renderHistory();
+}
+renderHistory();
+</script>
+</body>
+</html>
