@@ -22,7 +22,7 @@ Convert a single image to a printable 3D model (STL, 3MF, GLB) using [TripoSR](h
 ## Installation
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/free3d.git
+git clone https://github.com/dmonfrooij/free3d.git
 cd free3d
 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
