@@ -85,4 +85,4 @@ free3d/
 
 ## License
 
-MIT
+Public
